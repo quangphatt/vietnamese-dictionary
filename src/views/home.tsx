@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Search, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,15 +29,18 @@ interface DictionaryResponse {
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DictionaryResponse["data"] | null>(
     null
   );
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
-  const handleSearch = async () => {
-    if (!searchTerm.trim()) {
+  const performSearch = async (word: string) => {
+    if (!word.trim()) {
       return;
     }
 
@@ -46,7 +50,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `/api/dictionary?word=${encodeURIComponent(searchTerm.trim())}`
+        `/api/dictionary?word=${encodeURIComponent(word.trim())}`
       );
 
       if (!response.ok) {
@@ -62,6 +66,41 @@ export default function Home() {
       setLoading(false);
     }
   };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      return;
+    }
+
+    const trimmedWord = searchTerm.trim();
+    const encodedWord = encodeURIComponent(trimmedWord);
+    const currentSearchParam = searchParams.get("search");
+
+    // Only make API request if the new value is different from the current one
+    if (currentSearchParam !== encodedWord) {
+      // Update URL with search query
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("search", encodedWord);
+      router.push(`?${params.toString()}`);
+
+      // Only call API if value is different
+      await performSearch(trimmedWord);
+    }
+  };
+
+  // Initialize from URL search param
+  useEffect(() => {
+    if (initialized) return;
+
+    const searchParam = searchParams.get("search");
+    if (searchParam) {
+      const decodedWord = decodeURIComponent(searchParam);
+      setSearchTerm(decodedWord);
+      performSearch(decodedWord);
+    }
+    setInitialized(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -98,7 +137,18 @@ export default function Home() {
             {searchTerm && (
               <button
                 type="button"
-                onClick={() => setSearchTerm("")}
+                onClick={() => {
+                  setSearchTerm("");
+                  setResult(null);
+                  setError(null);
+                  // Clear URL search parameter
+                  const params = new URLSearchParams(searchParams.toString());
+                  params.delete("search");
+                  const newUrl = params.toString()
+                    ? `?${params.toString()}`
+                    : window.location.pathname;
+                  router.push(newUrl);
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                 disabled={loading}
                 aria-label="Clear input"
