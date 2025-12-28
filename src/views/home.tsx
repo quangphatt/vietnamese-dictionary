@@ -50,7 +50,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `/api/dictionary?word=${encodeURIComponent(word.trim())}`
+        `/api/dictionary/search?word=${encodeURIComponent(word.trim())}`
       );
 
       if (!response.ok) {
