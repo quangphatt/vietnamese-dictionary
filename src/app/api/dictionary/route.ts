@@ -18,21 +18,21 @@ export const GET = async (request: NextRequest) => {
       }
     );
     const data = await response.json();
-// demo data response if success: {
-//     "exists": true,
-//     "word": "học sinh",
-//     "meanings": [
-//         {
-//             "definition": "người học ở bậc phổ thông",
-//             "example": "học sinh tiểu học ~ thời học sinh",
-//             "pos": "Danh từ",
-//             "sub_pos": "Danh từ chỉ vật, hiện tượng"
-//         }
-//     ]
-// }
-// demo data response if error: {
-//     "exists": false,
-// }
+    // demo data response if success: {
+    //     "exists": true,
+    //     "word": "học sinh",
+    //     "meanings": [
+    //         {
+    //             "definition": "người học ở bậc phổ thông",
+    //             "example": "học sinh tiểu học ~ thời học sinh",
+    //             "pos": "Danh từ",
+    //             "sub_pos": "Danh từ chỉ vật, hiện tượng"
+    //         }
+    //     ]
+    // }
+    // demo data response if error: {
+    //     "exists": false,
+    // }
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("Error fetching dictionary", error);
