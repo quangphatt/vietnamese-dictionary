@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Loader2, X } from "lucide-react";
+import { Search, Loader2, X, Volume2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,19 +13,41 @@ interface Meaning {
   example?: string;
   pos: string;
   sub_pos?: string;
+  definition_lang?: string;
+}
+
+interface Pronunciation {
+  ipa: string;
+  region?: string;
+}
+
+interface Translation {
+  lang_code: string;
+  translation: string;
+  lang_name: string;
+  definition_lang?: string;
+}
+
+interface Relation {
+  related_word: string;
+  relation_type: string;
+}
+
+interface DictionaryResult {
+  lang_code: string;
+  lang_name: string;
+  audio?: string;
+  meanings: Meaning[] | Record<string, Meaning[]>;
+  pronunciations?: Pronunciation[];
+  translations?: Translation[];
+  relations?: Relation[];
 }
 
 interface DictionaryResponse {
   data: {
     exists: boolean;
     word?: string;
-    meanings?: Meaning[];
-  };
-}
-
-interface SuggestResponse {
-  data: {
-    suggestions?: string[];
+    results?: DictionaryResult[];
   };
 }
 
@@ -37,7 +59,9 @@ export default function Home() {
   const [result, setResult] = useState<DictionaryResponse["data"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showOtherPronunciations, setShowOtherPronunciations] = useState<Record<number, boolean>>({});
+  const [activeTab, setActiveTab] = useState<number>(0);
+  const resultRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const performSearch = async (word: string) => {
     if (!word.trim()) {
@@ -59,32 +83,9 @@ export default function Home() {
 
       const data: DictionaryResponse = await response.json();
       setResult(data.data);
-
-      // Fetch suggestions if search was successful
-      if (data.data.exists && data.data.word) {
-        try {
-          const suggestResponse = await fetch(
-            `/api/dictionary/suggest?q=${encodeURIComponent(word.trim())}`
-          );
-          if (suggestResponse.ok) {
-            const suggestData: SuggestResponse = await suggestResponse.json();
-            setSuggestions(
-              suggestData.data.suggestions?.filter((s) => s !== word.trim()) ||
-                []
-            );
-          }
-        } catch (suggestErr) {
-          // Silently fail suggestions, don't show error
-          console.error("Error fetching suggestions:", suggestErr);
-          setSuggestions([]);
-        }
-      } else {
-        setSuggestions([]);
-      }
     } catch (err) {
       setError("Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại.");
       console.error("Error:", err);
-      setSuggestions([]);
     } finally {
       setLoading(false);
     }
@@ -138,10 +139,10 @@ export default function Home() {
         <div className="mb-8 flex flex-col items-center gap-4">
           <Logo size={120} className="mb-2" />
           <h1 className="text-4xl font-bold text-foreground">
-            Từ Điển Tiếng Việt
+            Từ Điển Tiếng Việt, Anh - Việt
           </h1>
           <p className="text-muted-foreground">
-            Tra cứu từ điển tiếng Việt trực tuyến
+            Tra cứu từ điển trực tuyến
           </p>
         </div>
 
@@ -164,7 +165,6 @@ export default function Home() {
                   setSearchTerm("");
                   setResult(null);
                   setError(null);
-                  setSuggestions([]);
                   // Clear URL search parameter
                   const params = new URLSearchParams(searchParams.toString());
                   params.delete("search");
@@ -231,93 +231,328 @@ export default function Home() {
         )}
 
         {/* Results */}
-        {result && result.exists && result.word && result.meanings && (
+        {result && result.exists && result.word && result.results && (
           <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-3xl">{result.word}</CardTitle>
-              </CardHeader>
-            </Card>
+            {/* Tabs for multiple results */}
+            {result.results.length > 1 && (
+              <div className="sticky top-0 z-10 bg-background border-b border-border pb-1">
+                <div className="flex gap-1 overflow-x-auto py-2">
+                  {result.results.map((activeResult, resultIndex) => (
+                    <button
+                      key={resultIndex}
+                      onClick={() => {
+                        setActiveTab(resultIndex);
+                        const element = resultRefs.current[resultIndex];
+                        if (element) {
+                          element.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                        activeTab === resultIndex
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                      }`}
+                    >
+                      {activeResult.lang_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {result.results.map((activeResult, resultIndex) => (
+              <div
+                key={resultIndex}
+                ref={(el) => {
+                  resultRefs.current[resultIndex] = el;
+                }}
+                className="space-y-4 scroll-mt-20"
+              >
+                <Card>
+                  <CardHeader className="relative">
+                    {activeResult.audio && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          const audio = new Audio(activeResult.audio!);
+                          audio.play().catch((err) => {
+                            console.error("Error playing audio", err);
+                          });
+                        }}
+                        aria-label="Phát âm"
+                        className="absolute right-6 top-6"
+                      >
+                        <Volume2 className="size-5" />
+                      </Button>
+                    )}
+                    <div className="pr-12">
+                      <CardTitle className="text-3xl">
+                        {resultIndex === 0 ? result.word : `${result.word} (${activeResult.lang_name})`}
+                      </CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {activeResult.lang_name}
+                      </p>
+                        {(() => {
+                          const pronunciations = activeResult.pronunciations || [];
+                          if (pronunciations.length === 0) return null;
 
-            {(() => {
-              // Group meanings by pos
-              const groupedMeanings = result.meanings.reduce((acc, meaning) => {
-                const pos = meaning.pos || "Khác";
-                if (!acc[pos]) {
-                  acc[pos] = [];
-                }
-                acc[pos].push(meaning);
-                return acc;
-              }, {} as Record<string, typeof result.meanings>);
+                          // Tìm phiên âm ưu tiên (Hà-Nội hoặc UK)
+                          const priorityRegions = ["Hà-Nội", "UK"];
+                          const mainPronunciation =
+                            pronunciations.find((p) =>
+                              priorityRegions.some((region) =>
+                                p.region?.includes(region)
+                              )
+                            ) || pronunciations[0];
+                          const otherPronunciations = pronunciations.filter(
+                            (p) => p !== mainPronunciation
+                          );
 
-              return Object.entries(groupedMeanings).map(([pos, meanings]) => (
-                <Card key={pos}>
-                  <CardHeader>
-                    <CardTitle className="text-xl">{pos}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {meanings.map((meaning, index) => (
-                      <div key={index} className="space-y-3">
-                        {meaning.sub_pos && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
-                              {meaning.sub_pos}
+                          return (
+                            <div className="mt-2 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm text-muted-foreground">
+                                  /{mainPronunciation.ipa}/
+                                </span>
+                                {mainPronunciation.region && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({mainPronunciation.region})
+                                  </span>
+                                )}
+                              </div>
+                              {otherPronunciations.length > 0 && (
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowOtherPronunciations((prev) => ({
+                                        ...prev,
+                                        [resultIndex]: !prev[resultIndex],
+                                      }))
+                                    }
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    {showOtherPronunciations[resultIndex] ? (
+                                      <>
+                                        <ChevronUp className="size-3" />
+                                        Ẩn phiên âm khác
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="size-3" />
+                                        Phiên âm khác ({otherPronunciations.length})
+                                      </>
+                                    )}
+                                  </button>
+                                  {showOtherPronunciations[resultIndex] && (
+                                    <div className="mt-2 space-y-1 pl-4">
+                                      {otherPronunciations.map((p, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center gap-2 text-xs"
+                                        >
+                                          <span className="font-mono text-muted-foreground">
+                                            /{p.ipa}/
+                                          </span>
+                                          {p.region && (
+                                            <span className="text-muted-foreground">
+                                              ({p.region})
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </CardHeader>
+                  </Card>
+
+                {/* Meanings grouped by definition_lang, then by pos */}
+                {(() => {
+                  // Handle both array (legacy) and object (grouped by definition_lang) formats
+                  const meaningsArray = Array.isArray(activeResult.meanings)
+                    ? activeResult.meanings
+                    : Object.values(activeResult.meanings).flat();
+
+                  const langNameMap: Record<string, string> = {
+                    vi: "Tiếng Việt",
+                    en: "Tiếng Anh",
+                  };
+
+                  // First group by definition_lang
+                  const groupedByLang = meaningsArray.reduce(
+                    (acc, meaning) => {
+                      const definitionLang = meaning.definition_lang || "";
+                      const lang = definitionLang
+                        ? langNameMap[definitionLang] || definitionLang
+                        : "Khác";
+                      if (!acc[lang]) {
+                        acc[lang] = [];
+                      }
+                      acc[lang].push(meaning);
+                      return acc;
+                    },
+                    {} as Record<string, Meaning[]>
+                  );
+
+                  // Then group each lang group by pos
+                  return Object.entries(groupedByLang).map(([lang, meanings]) => {
+                    const groupedMeanings = meanings.reduce(
+                      (acc, meaning) => {
+                        const pos = meaning.pos || "Khác";
+                        if (!acc[pos]) {
+                          acc[pos] = [];
+                        }
+                        acc[pos].push(meaning);
+                        return acc;
+                      },
+                      {} as Record<string, Meaning[]>
+                    );
+
+                    return (
+                      <Card key={lang}>
+                        <CardHeader>
+                          <CardTitle className="text-xl">Nghĩa {lang}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {Object.entries(groupedMeanings).map(
+                            ([pos, posMeanings]) => (
+                              <div key={`${lang}-${pos}`} className="space-y-4">
+                                <div>
+                                  <CardTitle className="text-lg">{pos}</CardTitle>
+                                </div>
+                                <div className="space-y-4">
+                                  {posMeanings.map((meaning, index) => (
+                                    <div key={index} className="space-y-3">
+                                      {meaning.sub_pos && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="rounded-md bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
+                                            {meaning.sub_pos}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div>
+                                        <p className="text-base leading-relaxed">
+                                          {meaning.definition}
+                                        </p>
+                                      </div>
+                                      {meaning.example && (
+                                        <div className="rounded-md bg-muted p-3">
+                                          <p className="text-sm text-muted-foreground">
+                                            <span className="font-medium">
+                                              Ví dụ:{" "}
+                                            </span>
+                                            {meaning.example}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {index < posMeanings.length - 1 && (
+                                        <div className="border-t border-border pt-4" />
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                                {Object.keys(groupedMeanings).indexOf(pos) < Object.keys(groupedMeanings).length - 1 && (
+                                  <div className="border-t border-border pt-4" />
+                                )}
+                              </div>
+                            )
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  });
+                })()}
+
+                {/* Translations */}
+                {activeResult.translations &&
+                  activeResult.translations.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-xl">
+                          Dịch nghĩa
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {activeResult.translations.map((t, idx) => (
+                          <div
+                            key={idx}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm"
+                          >
+                            <span className="font-medium">
+                              {t.translation}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {t.lang_name}
                             </span>
                           </div>
-                        )}
-                        <div>
-                          <p className="text-base leading-relaxed">
-                            {meaning.definition}
-                          </p>
-                        </div>
-                        {meaning.example && (
-                          <div className="rounded-md bg-muted p-3">
-                            <p className="text-sm text-muted-foreground">
-                              <span className="font-medium">Ví dụ: </span>
-                              {meaning.example}
-                            </p>
-                          </div>
-                        )}
-                        {index < meanings.length - 1 && (
-                          <div className="border-t border-border pt-4" />
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              ));
-            })()}
-          </div>
-        )}
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
 
-        {/* Suggestions */}
-        {result && result.exists && suggestions.length > 0 && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="text-xl">Từ ngữ liên quan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((suggestion, index) => (
-                  <a
-                    key={index}
-                    href={`?search=${encodeURIComponent(suggestion)}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setSearchTerm(suggestion);
-                      const params = new URLSearchParams();
-                      params.set("search", encodeURIComponent(suggestion));
-                      router.push(`?${params.toString()}`);
-                      performSearch(suggestion);
-                    }}
-                    className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    {suggestion}
-                  </a>
-                ))}
+                {/* Related words grouped by relation_type */}
+                {activeResult.relations &&
+                  activeResult.relations.length > 0 && (
+                    <>
+                      {(() => {
+                        const groupedRelations = activeResult.relations.reduce(
+                          (acc, relation) => {
+                            const type = relation.relation_type || "Khác";
+                            if (!acc[type]) {
+                              acc[type] = [];
+                            }
+                            acc[type].push(relation);
+                            return acc;
+                          },
+                          {} as Record<string, typeof activeResult.relations>
+                        );
+
+                        return Object.entries(groupedRelations).map(
+                          ([type, relations]) => (
+                            <Card key={type}>
+                              <CardHeader>
+                                <CardTitle className="text-xl">{type}</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="flex flex-wrap gap-2">
+                                  {relations.map((r, idx) => (
+                                    <a
+                                      key={idx}
+                                      href={`?search=${encodeURIComponent(r.related_word)}`}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setSearchTerm(r.related_word);
+                                        const params = new URLSearchParams();
+                                        params.set(
+                                          "search",
+                                          encodeURIComponent(r.related_word)
+                                        );
+                                        router.push(`?${params.toString()}`);
+                                        performSearch(r.related_word);
+                                      }}
+                                      className="rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                      {r.related_word}
+                                    </a>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        );
+                      })()}
+                    </>
+                  )}
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         )}
 
         {/* Empty State */}

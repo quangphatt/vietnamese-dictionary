@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Từ Điển Tiếng Việt",
-  description: "Từ Điển Tiếng Việt",
+  title: "Từ Điển Trực Tuyến",
+  description: "Tra cứu từ điển trực tuyến",
   icons: {
     icon: "/images/logo-192x192.png",
   },
