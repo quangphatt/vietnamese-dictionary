@@ -138,10 +138,10 @@ export default function Home() {
         {/* Header */}
         <div className="mb-8 flex flex-col items-center gap-4">
           <Logo size={120} className="mb-2" />
-          <h1 className="text-4xl font-bold text-foreground">
+          <h1 className="text-4xl text-center font-bold text-foreground">
             Từ Điển Tiếng Việt, Anh - Việt
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-center">
             Tra cứu từ điển trực tuyến
           </p>
         </div>
