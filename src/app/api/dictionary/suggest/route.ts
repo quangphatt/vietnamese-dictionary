@@ -14,9 +14,7 @@ export const GET = async (request: NextRequest) => {
 
     try {
       const response = await fetch(
-        `https://minhqnd.com/api/dictionary/suggest?q=${encodeURIComponent(
-          q
-        )}&limit=10`,
+        `https://minhqnd.com/api/dictionary/suggest?q=${q}&limit=10`,
         {
           headers: {
             "Content-Type": "application/json",
